@@ -25,6 +25,17 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Vertex.Transport.Grpc\Vertex.Transport.Grpc.csproj" />
+    <ProjectReference Include="..\..\src\Vertex.Messaging\Vertex.Messaging.csproj" />
+    <ProjectReference Include="..\..\src\Vertex.Serialization.Protobuf\Vertex.Serialization.Protobuf.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Google.Protobuf" Version="$(GoogleProtobufVersion)" />
+    <PackageReference Include="Grpc.Tools" Version="$(GrpcToolsVersion)">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <Protobuf Include="protos\echo.proto" ProtoRoot="protos" GrpcServices="None" />
   </ItemGroup>
 
 </Project>

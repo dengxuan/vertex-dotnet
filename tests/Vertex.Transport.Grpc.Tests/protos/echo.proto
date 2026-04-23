@@ -1,0 +1,22 @@
+// Licensed to the Gordon under one or more agreements.
+// Gordon licenses this file to you under the MIT license.
+
+// Test-only proto for MessagingChannel + GrpcServerTransport E2E regression.
+
+syntax = "proto3";
+
+package vertex.tests.echo.v1;
+
+option csharp_namespace = "Vertex.Tests.Echo.V1";
+
+message EchoRequest {
+  string text = 1;
+}
+
+message EchoResponse {
+  string text = 1;
+}
+
+message HelloEvent {
+  string greeting = 1;
+}
