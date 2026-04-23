@@ -23,9 +23,14 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- 同时生成 Client + Server stub：服务端实现可由测试或上层应用按需使用，
-         运行时除 Grpc.Core.Api（Grpc.Net.Client 间接依赖）外不引入新依赖。 -->
-    <Protobuf Include="Protos\vertex_bidi.proto" GrpcServices="Both" />
+    <!-- Vendored from dengxuan/Vertex via scripts/sync-protos.sh at the SHA in
+         scripts/.spec-ref. DO NOT edit protos/**/*.proto by hand; change the spec
+         repo and re-run the sync script. The generated Client + Server stubs
+         bring no extra runtime dependency beyond Grpc.Core.Api (already
+         transitively required by Grpc.Net.Client). -->
+    <Protobuf Include="..\..\protos\vertex\transport\grpc\v1\bidi.proto"
+              ProtoRoot="..\..\protos"
+              GrpcServices="Both" />
   </ItemGroup>
 
 </Project>

@@ -1,0 +1,5 @@
+# Keep vendored protos and sync scripts LF regardless of platform,
+# otherwise CRLF conversion will cause the drift check to false-positive.
+*.proto text eol=lf
+scripts/sync-protos.sh text eol=lf
+scripts/.spec-ref text eol=lf
