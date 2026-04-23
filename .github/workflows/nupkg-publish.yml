@@ -1,0 +1,45 @@
+name: Publish NuGet Packages
+
+# Version is derived from git tags via MinVer at build time (see Directory.Build.props).
+#   - push `vX.Y.Z[-suffix]` tag → publishes that exact version
+#   - push commits to main       → publishes X.Y.Z-alpha.0.N (pre-release)
+# No manual version management in this workflow.
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*.*.*"
+  # Manual re-publish: useful when GitHub's push-workflow de-dup skips
+  # a merge-commit push, or to force re-build from any historical tag.
+  # Usage: gh workflow run nupkg-publish.yml --ref <branch-or-tag>
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 0  # MinVer needs full history + tags
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore dependencies
+        run: dotnet restore Vertex.sln
+
+      - name: Build and pack
+        run: dotnet pack Vertex.sln --configuration Release --output ./nupkgs
+
+      - name: Publish to GitHub Packages
+        run: dotnet nuget push "./nupkgs/*.nupkg" --api-key ${{ secrets.GITHUB_TOKEN }} --source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json" --symbol-source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json" --skip-duplicate

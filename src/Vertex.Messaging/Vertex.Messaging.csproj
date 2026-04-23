@@ -17,4 +17,8 @@
     <ProjectReference Include="..\Vertex.Transport.Abstractions\Vertex.Transport.Abstractions.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Vertex.Messaging.Tests" />
+  </ItemGroup>
+
 </Project>

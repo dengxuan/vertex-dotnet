@@ -133,7 +133,10 @@ public class GrpcTransportTests
             await transport.SendAsync(PeerId.Empty, Frames([2])));
     }
 
-    private static async Task WaitFor(Func<bool> condition, double timeoutSec = 10)
+    private static async Task WaitFor(
+        Func<bool> condition,
+        double timeoutSec = 15,
+        [System.Runtime.CompilerServices.CallerArgumentExpression(nameof(condition))] string? expr = null)
     {
         var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(timeoutSec);
         while (DateTime.UtcNow < deadline)
@@ -141,5 +144,6 @@ public class GrpcTransportTests
             if (condition()) return;
             await Task.Delay(20);
         }
+        Assert.Fail($"WaitFor timed out after {timeoutSec}s waiting for: {expr}");
     }
 }

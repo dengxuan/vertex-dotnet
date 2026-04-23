@@ -110,7 +110,10 @@ public class GrpcServerTransportTests
         Assert.Contains(fx.Events, e => e.Peer.Value == "ephemeral" && e.State == PeerConnectionState.Disconnected);
     }
 
-    private static async Task WaitFor(Func<bool> condition, double timeoutSec = 10)
+    private static async Task WaitFor(
+        Func<bool> condition,
+        double timeoutSec = 15,
+        [System.Runtime.CompilerServices.CallerArgumentExpression(nameof(condition))] string? expr = null)
     {
         var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(timeoutSec);
         while (DateTime.UtcNow < deadline)
@@ -118,6 +121,7 @@ public class GrpcServerTransportTests
             if (condition()) return;
             await Task.Delay(20);
         }
+        Assert.Fail($"WaitFor timed out after {timeoutSec}s waiting for: {expr}");
     }
 
     /// <summary>启动一个真实 Kestrel + gRPC server，挂上受测 transport。</summary>
