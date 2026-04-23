@@ -1,0 +1,49 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+    tags:
+      - 'v*.*.*'
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0  # MinVer needs full history + tags
+
+      - name: Check for .NET solution
+        id: haveCode
+        run: |
+          if ls *.sln 2>/dev/null | head -n1 >/dev/null; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "No .sln yet — skipping build/test. This is expected during initial bootstrap from Skywalker."
+          fi
+
+      - uses: actions/setup-dotnet@v5
+        if: steps.haveCode.outputs.present == 'true'
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore
+        if: steps.haveCode.outputs.present == 'true'
+        run: dotnet restore
+
+      - name: Build
+        if: steps.haveCode.outputs.present == 'true'
+        run: dotnet build --configuration Release --no-restore
+
+      - name: Test
+        if: steps.haveCode.outputs.present == 'true'
+        run: dotnet test --configuration Release --no-build

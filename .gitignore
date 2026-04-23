@@ -1,0 +1,30 @@
+# === .NET ===
+bin/
+obj/
+*.user
+*.suo
+.vs/
+TestResults/
+coverage/
+coveragereport/
+*.nupkg
+*.snupkg
+nupkgs/
+artifacts/
+
+# === IDE ===
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# === Claude Code local settings ===
+.claude/settings.local.json
+
+# === Local/Tmp ===
+*.log
+*.tmp
+_tmp_*/
+tmp/
