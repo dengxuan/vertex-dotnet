@@ -66,8 +66,41 @@ public sealed class GrpcTransport : ITransport
     /// <inheritdoc />
     public string Name { get; }
 
+    // Current connection state + backing field for the event, under _eventLock.
+    // Subscribers that attach after a state change has already fired receive the last
+    // state synchronously at add-time — avoids a subscribe-after-connect race where
+    // the reader would otherwise silently miss the Connected event.
+    private readonly object _eventLock = new();
+    private EventHandler<PeerConnectionEvent>? _peerConnectionChanged;
+    private PeerConnectionState? _lastConnectionState;
+
     /// <inheritdoc />
-    public event EventHandler<PeerConnectionEvent>? PeerConnectionChanged;
+    public event EventHandler<PeerConnectionEvent>? PeerConnectionChanged
+    {
+        add
+        {
+            if (value is null) return;
+            PeerConnectionState? replay = null;
+            lock (_eventLock)
+            {
+                _peerConnectionChanged += value;
+                replay = _lastConnectionState;
+            }
+            if (replay is { } state)
+            {
+                try { value(this, new PeerConnectionEvent(_serverPeer, state)); }
+                catch (Exception ex) { _logger.LogWarning(ex, "PeerConnectionChanged replay threw for {Peer}", _serverPeer); }
+            }
+        }
+        remove
+        {
+            if (value is null) return;
+            lock (_eventLock)
+            {
+                _peerConnectionChanged -= value;
+            }
+        }
+    }
 
     /// <inheritdoc />
     public ValueTask SendAsync(PeerId target, IReadOnlyList<ReadOnlyMemory<byte>> frames, CancellationToken cancellationToken = default)
@@ -288,9 +321,15 @@ public sealed class GrpcTransport : ITransport
 
     private void RaisePeerEvent(PeerConnectionState state)
     {
+        EventHandler<PeerConnectionEvent>? handler;
+        lock (_eventLock)
+        {
+            _lastConnectionState = state;
+            handler = _peerConnectionChanged;
+        }
         try
         {
-            PeerConnectionChanged?.Invoke(this, new PeerConnectionEvent(_serverPeer, state));
+            handler?.Invoke(this, new PeerConnectionEvent(_serverPeer, state));
         }
         catch (Exception ex)
         {
