@@ -192,7 +192,7 @@ public class GrpcServerTransportTests
         {
             _channel = GrpcChannel.ForAddress(serverAddress);
             var client = new Bidi.BidiClient(_channel);
-            var headers = new Metadata { { "x-skywalker-peer-id", peerId } };
+            var headers = new Metadata { { "x-vertex-peer-id", peerId } };
             _call = client.Connect(new CallOptions(headers: headers, cancellationToken: _cts.Token));
         }
 
