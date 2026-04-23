@@ -3,6 +3,8 @@
 
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
+using Vertex.Serialization;
+using Vertex.Serialization.Protobuf;
 using Vertex.Transport;
 using Vertex.Transport.Grpc;
 
@@ -44,6 +46,12 @@ public static class GrpcServerTransportServiceCollectionExtensions
 
         // 提供轻量 fallback registry（同 client 端）。
         services.TryAddSingleton<ITransportRegistry, DefaultTransportRegistry>();
+
+        // Server side also forces Protobuf — same policy as AddGrpcTransport (client).
+        // Cross-language peers need the Vertex.Messaging layer on both sides to
+        // agree on payload encoding; gRPC + Protobuf is the only valid combo.
+        services.AddKeyedSingleton<IMessageSerializer>(name, (_, _) => ProtobufMessageSerializer.Instance);
+
         return services;
     }
 
