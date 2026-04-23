@@ -37,6 +37,7 @@ internal sealed class MessagingChannel : IMessageBus, IRpcClient, IAsyncDisposab
     private readonly CancellationTokenSource _cts = new();
     private readonly Task _receiveLoop;
     private readonly TimeSpan _defaultTimeout;
+    private readonly TimeSpan _peerDisconnectGracePeriod;
     private int _disposed;
 
     public MessagingChannel(
@@ -47,7 +48,8 @@ internal sealed class MessagingChannel : IMessageBus, IRpcClient, IAsyncDisposab
         IReadOnlyDictionary<string, RpcHandlerRegistration> handlers,
         IServiceProvider services,
         ILogger<MessagingChannel> logger,
-        TimeSpan? defaultTimeout = null)
+        TimeSpan? defaultTimeout = null,
+        TimeSpan? peerDisconnectGracePeriod = null)
     {
         _name = name;
         _transport = transport;
@@ -57,6 +59,9 @@ internal sealed class MessagingChannel : IMessageBus, IRpcClient, IAsyncDisposab
         _services = services;
         _logger = logger;
         _defaultTimeout = defaultTimeout ?? TimeSpan.FromSeconds(30);
+        // Bounds the window between "transport fires Disconnected" and
+        // "pending invokes fail". See OnPeerConnectionChanged for why.
+        _peerDisconnectGracePeriod = peerDisconnectGracePeriod ?? TimeSpan.FromMilliseconds(200);
 
         _transport.PeerConnectionChanged += OnPeerConnectionChanged;
         _receiveLoop = Task.Run(() => RunReceiveLoopAsync(_cts.Token));
@@ -284,11 +289,38 @@ internal sealed class MessagingChannel : IMessageBus, IRpcClient, IAsyncDisposab
         {
             return;
         }
-        // 对端断开：把所有 pending 都标记失败（粗粒度，不区分目标 peer，足够触发重试）。
-        foreach (var (_, pending) in _pending)
+
+        // The transport's read loop (e.g. GrpcServerTransport.HandleConnectAsync)
+        // enqueues inbound messages onto a shared inbound channel, then raises
+        // this event from its finally block. Our receive loop (on a separate
+        // thread) may not yet have drained the last message that arrived just
+        // before disconnect — a response for a still-pending Invoke could be
+        // sitting in that queue right now.
+        //
+        // If we fail pending invokes synchronously here, that racing response
+        // will be consumed by the receive loop *after* the TCS has been
+        // exceptioned, and the caller sees RpcPeerDisconnectedException even
+        // though the server-side actually responded successfully.
+        //
+        // Defer the failure by a short grace period. Any Invoke whose response
+        // arrives during the window completes via TrySetResult and the
+        // subsequent TrySetException below is a no-op.
+        _ = Task.Run(async () =>
         {
-            pending.Tcs.TrySetException(new RpcPeerDisconnectedException($"Peer {e.Peer} disconnected before response."));
-        }
+            try
+            {
+                await Task.Delay(_peerDisconnectGracePeriod).ConfigureAwait(false);
+                foreach (var (_, pending) in _pending)
+                {
+                    pending.Tcs.TrySetException(
+                        new RpcPeerDisconnectedException($"Peer {e.Peer} disconnected before response."));
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error while failing pending invokes after peer '{Peer}' disconnect.", e.Peer);
+            }
+        });
     }
 
     public async ValueTask DisposeAsync()

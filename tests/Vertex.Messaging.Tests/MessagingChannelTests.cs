@@ -130,6 +130,55 @@ public class MessagingChannelTests
                 timeout: TimeSpan.FromMilliseconds(200)).AsTask());
     }
 
+    /// <summary>
+    /// Regression guard: when the transport raises Disconnected, the channel must
+    /// wait a brief grace period before failing pending invokes. If a response
+    /// arrives during that window, the Invoke must complete successfully — not
+    /// surface <see cref="RpcPeerDisconnectedException"/>.
+    ///
+    /// Without this fix, production ran into: a Go client handler returns its
+    /// response, then the bidi stream tears down; .NET's transport read loop
+    /// fires Disconnected while the response is still sitting in the inbound
+    /// queue; the synchronous event handler exceptioned every pending Invoke
+    /// before the receive loop could drain the racing response.
+    /// </summary>
+    [Fact]
+    public async Task Invoke_ResponseArrivesDuringDisconnectGrace_CompletesSuccessfully()
+    {
+        var services = new ServiceCollection();
+        services.AddScoped<IRpcHandler<EchoRequest, EchoResponse>>(_ =>
+            new LambdaEchoHandler(req => new EchoResponse($"echo: {req.Text}")));
+        var serverSp = services.BuildServiceProvider();
+
+        var (alice, bob) = InMemoryTransport.CreatePair();
+        // Long grace period so we can deterministically interleave disconnect
+        // and response: we fire Disconnected BEFORE the response lands, then
+        // show that the receive loop drains the response inside the grace
+        // and the Invoke completes successfully.
+        await using var aliceChannel = CreateChannel("alice", alice,
+            reg => reg.RegisterRequest<EchoRequest, EchoResponse>(),
+            peerDisconnectGracePeriod: TimeSpan.FromSeconds(2));
+        await using var bobChannel = CreateChannel("bob", bob,
+            reg => reg.RegisterRequest<EchoRequest, EchoResponse>(),
+            handlers: CreateEchoHandlerRegistration(),
+            services: serverSp);
+
+        // Start an Invoke; it's waiting for a response from bob.
+        var invokeTask = aliceChannel.InvokeAsync<EchoRequest, EchoResponse>(
+            new EchoRequest("hi"),
+            timeout: TimeSpan.FromSeconds(10)).AsTask();
+
+        // Fire a disconnect on alice BEFORE the response has arrived. Under
+        // the old (buggy) behavior, this synchronously exceptioned the
+        // pending invoke. Under the fix, the failure is deferred, and the
+        // response handler (which runs on the receive loop) unblocks the
+        // invoke with a real EchoResponse before the grace period expires.
+        alice.RaisePeerConnection(PeerConnectionState.Disconnected, "bob");
+
+        var resp = await invokeTask.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal("echo: hi", resp.Text);
+    }
+
     // ============================= Topic naming =============================
 
     [Fact]
@@ -156,7 +205,8 @@ public class MessagingChannelTests
         Action<MessageTypeRegistry>? configureTypes = null,
         IReadOnlyDictionary<string, RpcHandlerRegistration>? handlers = null,
         IServiceProvider? services = null,
-        TimeSpan? defaultTimeout = null)
+        TimeSpan? defaultTimeout = null,
+        TimeSpan? peerDisconnectGracePeriod = null)
     {
         var registry = new MessageTypeRegistry();
         configureTypes?.Invoke(registry);
@@ -170,7 +220,8 @@ public class MessagingChannelTests
             handlers,
             services,
             NullLogger<MessagingChannel>.Instance,
-            defaultTimeout);
+            defaultTimeout,
+            peerDisconnectGracePeriod);
     }
 
     private static Dictionary<string, RpcHandlerRegistration> CreateEchoHandlerRegistration()
