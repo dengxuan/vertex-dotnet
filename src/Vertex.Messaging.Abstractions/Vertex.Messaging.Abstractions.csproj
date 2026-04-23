@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace></RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Vertex.Transport.Abstractions\Vertex.Transport.Abstractions.csproj" />
+  </ItemGroup>
+
+</Project>

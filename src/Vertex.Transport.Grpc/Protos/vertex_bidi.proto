@@ -1,0 +1,35 @@
+// Licensed to the Gordon under one or more agreements.
+// Gordon licenses this file to you under the MIT license.
+//
+// Vertex.Transport.Grpc 内部 wire 协议。
+// 本 .proto **故意**保持极简：只承载「字节帧」概念，不感知任何业务消息类型，
+// 把序列化与协议语义留给上层 Vertex.Messaging。
+//
+// 这样设计的好处：
+//   1) Vertex.Transport.Grpc 不依赖任何业务 proto / 业务包；
+//   2) 业务侧（gaming / payment / 任意第三方）可以选择 MessagePack、Protobuf
+//      甚至 JSON 作为消息格式，wire 不变；
+//   3) 一条 ITransport.SendAsync(frames) 调用 = 多条 Frame，
+//      最后一帧 end_of_message=true 标记消息边界。
+syntax = "proto3";
+
+package vertex.v1.transport.grpc.v1;
+
+option csharp_namespace = "Vertex.Transport.Grpc.Protocol.V1";
+
+// 双向流式 RPC：客户端与服务端各自从对端读到一连串 Frame，
+// 同一逻辑消息的多帧按发送顺序到达，服务端实现需保证「写入顺序 = 接收顺序」
+// （对单条 stream 内的多帧消息必然成立；跨消息无序由上层处理）。
+service Bidi {
+  rpc Connect(stream TransportFrame) returns (stream TransportFrame);
+}
+
+// 一个 TransportFrame = 一帧 = 一段不透明字节。多帧组成一条 ITransport.TransportMessage。
+message TransportFrame {
+  // 帧负载。可以为空（空消息允许，由上层语义决定是否合法）。
+  bytes payload = 1;
+
+  // true 表示该帧是当前 TransportMessage 的最后一帧。
+  // 接收方应在该位为 true 时把累积的所有帧组装成一条 TransportMessage 投递给上层。
+  bool end_of_message = 2;
+}

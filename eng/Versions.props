@@ -1,0 +1,34 @@
+<Project>
+
+  <!--
+    Project version is derived from git tags via MinVer (see Directory.Build.props).
+    Do NOT add MajorVersion / MinorVersion / PatchVersion / PackageVersion here.
+  -->
+
+  <!-- ==================== Centralized NuGet package versions ==================== -->
+
+  <PropertyGroup Label="Microsoft.Extensions">
+    <MicrosoftExtensionsVersion>9.0.0</MicrosoftExtensionsVersion>
+  </PropertyGroup>
+
+  <PropertyGroup Label="Build tooling">
+    <MicrosoftSourceLinkVersion>8.0.0</MicrosoftSourceLinkVersion>
+    <MinVerPackageVersion>7.0.0</MinVerPackageVersion>
+  </PropertyGroup>
+
+  <PropertyGroup Label="gRPC">
+    <GoogleProtobufVersion>3.28.3</GoogleProtobufVersion>
+    <GrpcNetClientVersion>2.66.0</GrpcNetClientVersion>
+    <GrpcAspNetCoreVersion>2.66.0</GrpcAspNetCoreVersion>
+    <GrpcToolsVersion>2.66.0</GrpcToolsVersion>
+  </PropertyGroup>
+
+  <PropertyGroup Label="Serializers">
+    <MessagePackVersion>3.1.3</MessagePackVersion>
+  </PropertyGroup>
+
+  <PropertyGroup Label="Transports">
+    <NetMQVersion>4.0.1.13</NetMQVersion>
+  </PropertyGroup>
+
+</Project>
