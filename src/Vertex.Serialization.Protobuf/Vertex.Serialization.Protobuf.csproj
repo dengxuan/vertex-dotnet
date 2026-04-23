@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace></RootNamespace>
+    <Description>Vertex IMessageSerializer implementation backed by Google.Protobuf. Required by Vertex.Transport.Grpc.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Google.Protobuf" Version="$(GoogleProtobufVersion)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Vertex.Serialization.Abstractions\Vertex.Serialization.Abstractions.csproj" />
+  </ItemGroup>
+
+</Project>

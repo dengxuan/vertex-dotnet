@@ -1,11 +1,12 @@
 // Licensed to the Gordon under one or more agreements.
 // Gordon licenses this file to you under the MIT license.
 
+using Vertex.Messaging;
+using Vertex.Serialization;
 using Vertex.Transport;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Vertex.Messaging;
 
 namespace Microsoft.Extensions.DependencyInjection;
 
@@ -40,12 +41,17 @@ public static class MessagingServiceCollectionExtensions
         services.AddKeyedSingleton<MessagingChannel>(name, (sp, key) =>
         {
             var transport = sp.GetRequiredService<ITransportRegistry>().Get(transportName);
+            var serializer = sp.GetKeyedService<IMessageSerializer>(key)
+                ?? throw new InvalidOperationException(
+                    $"Messaging channel '{key}' has no IMessageSerializer registered. " +
+                    $"Transport DI extensions register one automatically: " +
+                    $"AddGrpcTransport forces Protobuf; AddNetMq*Transport defaults to MessagePack.");
             var typeRegistry = sp.GetRequiredKeyedService<MessageTypeRegistry>(key);
             var handlers = sp.GetServices<RpcHandlerRegistrationHolder>()
                 .Where(h => h.Registration.ChannelName == (string)key!)
                 .ToDictionary(h => h.Registration.Topic, h => h.Registration, StringComparer.Ordinal);
             var logger = sp.GetRequiredService<ILoggerFactory>().CreateLogger<MessagingChannel>();
-            return new MessagingChannel((string)key!, transport, typeRegistry, handlers, sp, logger);
+            return new MessagingChannel((string)key!, transport, serializer, typeRegistry, handlers, sp, logger);
         });
 
         services.AddKeyedSingleton<IMessageBus>(name, (sp, key) => sp.GetRequiredKeyedService<MessagingChannel>(key));

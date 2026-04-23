@@ -3,6 +3,8 @@
 
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
+using Vertex.Serialization;
+using Vertex.Serialization.Protobuf;
 using Vertex.Transport;
 using Vertex.Transport.Grpc;
 
@@ -43,6 +45,10 @@ public static class GrpcTransportServiceCollectionExtensions
             logger.LogInformation("gRPC transport '{Name}' starting; server={Server}", name, options.ServerAddress);
             return new GrpcTransport(name, options, logger);
         });
+
+        // gRPC transport FORCES Protobuf — this is the whole point of choosing gRPC over raw sockets.
+        // The user cannot override. Cross-language interop demands Protobuf end-to-end.
+        services.AddKeyedSingleton<IMessageSerializer>(name, (_, _) => ProtobufMessageSerializer.Instance);
 
         return services;
     }

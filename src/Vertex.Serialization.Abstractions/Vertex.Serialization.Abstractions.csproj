@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace></RootNamespace>
+    <Description>Vertex serialization abstraction: IMessageSerializer interface. Transport-independent.</Description>
+  </PropertyGroup>
+
+</Project>

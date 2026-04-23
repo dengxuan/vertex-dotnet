@@ -4,6 +4,8 @@
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using NetMQ.Sockets;
+using Vertex.Serialization;
+using Vertex.Serialization.MessagePack;
 using Vertex.Transport;
 using Vertex.Transport.NetMq;
 
@@ -16,11 +18,13 @@ public static class NetMqTransportServiceCollectionExtensions
 {
     /// <summary>
     /// 注册一个 Router transport（bind，多客户端，带 identity 路由）。
+    /// <paramref name="serializer"/> 为 null 时默认 <see cref="MessagePackMessageSerializer"/>。
     /// </summary>
     public static IServiceCollection AddNetMqRouterTransport(
         this IServiceCollection services,
         string name,
-        Action<NetMqBindOptions> configure)
+        Action<NetMqBindOptions> configure,
+        IMessageSerializer? serializer = null)
     {
         EnsureRegistry(services);
         var options = new NetMqBindOptions();
@@ -37,16 +41,19 @@ public static class NetMqTransportServiceCollectionExtensions
             logger.LogInformation("NetMQ Router '{Name}' bound to port {Port}", name, options.ActualPort);
             return new NetMqRouterTransport(name, socket, logger);
         });
+        RegisterSerializer(services, name, serializer);
         return services;
     }
 
     /// <summary>
     /// 注册一个 Dealer transport（connect，可带 identity）。
+    /// <paramref name="serializer"/> 为 null 时默认 <see cref="MessagePackMessageSerializer"/>。
     /// </summary>
     public static IServiceCollection AddNetMqDealerTransport(
         this IServiceCollection services,
         string name,
-        Action<NetMqConnectOptions> configure)
+        Action<NetMqConnectOptions> configure,
+        IMessageSerializer? serializer = null)
     {
         EnsureRegistry(services);
         var options = new NetMqConnectOptions();
@@ -71,16 +78,19 @@ public static class NetMqTransportServiceCollectionExtensions
         });
         services.AddKeyedSingleton<IConnectableTransport>(name, (sp, key) =>
             (IConnectableTransport)sp.GetRequiredService<ITransportRegistry>().Get((string)key!));
+        RegisterSerializer(services, name, serializer);
         return services;
     }
 
     /// <summary>
     /// 注册一个 Pub transport（bind，单向广播）。
+    /// <paramref name="serializer"/> 为 null 时默认 <see cref="MessagePackMessageSerializer"/>。
     /// </summary>
     public static IServiceCollection AddNetMqPubTransport(
         this IServiceCollection services,
         string name,
-        Action<NetMqBindOptions> configure)
+        Action<NetMqBindOptions> configure,
+        IMessageSerializer? serializer = null)
     {
         EnsureRegistry(services);
         var options = new NetMqBindOptions();
@@ -96,16 +106,19 @@ public static class NetMqTransportServiceCollectionExtensions
             logger.LogInformation("NetMQ Pub '{Name}' bound to port {Port}", name, options.ActualPort);
             return new NetMqPubTransport(name, socket, logger);
         });
+        RegisterSerializer(services, name, serializer);
         return services;
     }
 
     /// <summary>
     /// 注册一个 Sub transport（connect，按主题订阅；默认订阅全部）。
+    /// <paramref name="serializer"/> 为 null 时默认 <see cref="MessagePackMessageSerializer"/>。
     /// </summary>
     public static IServiceCollection AddNetMqSubTransport(
         this IServiceCollection services,
         string name,
         Action<NetMqConnectOptions>? configure = null,
+        IMessageSerializer? serializer = null,
         params string[] subscriptions)
     {
         EnsureRegistry(services);
@@ -139,7 +152,19 @@ public static class NetMqTransportServiceCollectionExtensions
         });
         services.AddKeyedSingleton<IConnectableTransport>(name, (sp, key) =>
             (IConnectableTransport)sp.GetRequiredService<ITransportRegistry>().Get((string)key!));
+        RegisterSerializer(services, name, serializer);
         return services;
+    }
+
+    /// <summary>
+    /// 把 NetMq transport 的 serializer 绑定到命名 channel。
+    /// 允许用户注入任意 <see cref="IMessageSerializer"/>（Protobuf / 自定义 JSON / 等）；
+    /// 不指定则用 MessagePack 默认（<see cref="MessagePackMessageSerializer"/>）。
+    /// </summary>
+    private static void RegisterSerializer(IServiceCollection services, string name, IMessageSerializer? serializer)
+    {
+        var effective = serializer ?? MessagePackMessageSerializer.Instance;
+        services.AddKeyedSingleton<IMessageSerializer>(name, (_, _) => effective);
     }
 
     private static void EnsureRegistry(IServiceCollection services)

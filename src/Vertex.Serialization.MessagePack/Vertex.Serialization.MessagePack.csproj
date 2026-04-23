@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace></RootNamespace>
+    <Description>Vertex IMessageSerializer implementation backed by MessagePack-CSharp. Default for Vertex.Transport.NetMq.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MessagePack" Version="$(MessagePackVersion)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Vertex.Serialization.Abstractions\Vertex.Serialization.Abstractions.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -17,6 +17,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Vertex.Serialization.Abstractions\Vertex.Serialization.Abstractions.csproj" />
+    <ProjectReference Include="..\Vertex.Serialization.Protobuf\Vertex.Serialization.Protobuf.csproj" />
     <ProjectReference Include="..\Vertex.Transport.Abstractions\Vertex.Transport.Abstractions.csproj" />
   </ItemGroup>
 

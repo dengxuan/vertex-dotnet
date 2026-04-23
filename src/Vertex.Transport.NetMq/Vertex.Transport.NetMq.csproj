@@ -13,6 +13,9 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Vertex.Serialization.Abstractions\Vertex.Serialization.Abstractions.csproj" />
+    <!-- MessagePack is the default NetMq serializer; users can override via options.Serializer. -->
+    <ProjectReference Include="..\Vertex.Serialization.MessagePack\Vertex.Serialization.MessagePack.csproj" />
     <ProjectReference Include="..\Vertex.Transport.Abstractions\Vertex.Transport.Abstractions.csproj" />
   </ItemGroup>
 

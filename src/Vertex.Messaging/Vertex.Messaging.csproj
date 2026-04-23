@@ -5,7 +5,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="MessagePack" Version="$(MessagePackVersion)" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="$(MicrosoftExtensionsVersion)" />
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="$(MicrosoftExtensionsVersion)" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="$(MicrosoftExtensionsVersion)" />
@@ -14,6 +13,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Vertex.Messaging.Abstractions\Vertex.Messaging.Abstractions.csproj" />
+    <ProjectReference Include="..\Vertex.Serialization.Abstractions\Vertex.Serialization.Abstractions.csproj" />
     <ProjectReference Include="..\Vertex.Transport.Abstractions\Vertex.Transport.Abstractions.csproj" />
   </ItemGroup>
 

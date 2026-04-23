@@ -3,6 +3,7 @@
 
 using System.Collections.Concurrent;
 using Vertex.Messaging.Internal;
+using Vertex.Serialization;
 using Vertex.Transport;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -24,6 +25,7 @@ internal sealed class MessagingChannel : IMessageBus, IRpcClient, IAsyncDisposab
 {
     private readonly string _name;
     private readonly ITransport _transport;
+    private readonly IMessageSerializer _serializer;
     private readonly MessageTypeRegistry _typeRegistry;
     private readonly IReadOnlyDictionary<string, RpcHandlerRegistration> _handlers;
     private readonly IServiceProvider _services;
@@ -40,6 +42,7 @@ internal sealed class MessagingChannel : IMessageBus, IRpcClient, IAsyncDisposab
     public MessagingChannel(
         string name,
         ITransport transport,
+        IMessageSerializer serializer,
         MessageTypeRegistry typeRegistry,
         IReadOnlyDictionary<string, RpcHandlerRegistration> handlers,
         IServiceProvider services,
@@ -48,6 +51,7 @@ internal sealed class MessagingChannel : IMessageBus, IRpcClient, IAsyncDisposab
     {
         _name = name;
         _transport = transport;
+        _serializer = serializer;
         _typeRegistry = typeRegistry;
         _handlers = handlers;
         _services = services;
@@ -56,14 +60,16 @@ internal sealed class MessagingChannel : IMessageBus, IRpcClient, IAsyncDisposab
 
         _transport.PeerConnectionChanged += OnPeerConnectionChanged;
         _receiveLoop = Task.Run(() => RunReceiveLoopAsync(_cts.Token));
-        _logger.LogInformation("Messaging channel '{Name}' started on transport '{Transport}'.", _name, _transport.Name);
+        _logger.LogInformation(
+            "Messaging channel '{Name}' started on transport '{Transport}' with serializer '{Serializer}'.",
+            _name, _transport.Name, _serializer.GetType().Name);
     }
 
     public ValueTask PublishAsync<T>(T @event, PeerId target = default, CancellationToken cancellationToken = default)
         where T : notnull
     {
         var topic = MessageTopic.For<T>().Value;
-        var payload = MessagePack.MessagePackSerializer.Serialize(@event);
+        var payload = _serializer.Serialize(typeof(T), @event);
         var frames = BuildFrames(topic, MessageKind.Event, requestId: string.Empty, payload);
         return _transport.SendAsync(target, frames, cancellationToken);
     }
@@ -90,7 +96,7 @@ internal sealed class MessagingChannel : IMessageBus, IRpcClient, IAsyncDisposab
     {
         var topic = MessageTopic.For<TRequest>().Value;
         var requestId = Guid.NewGuid().ToString("N");
-        var payload = MessagePack.MessagePackSerializer.Serialize(request);
+        var payload = _serializer.Serialize(typeof(TRequest), request);
         var frames = BuildFrames(topic, MessageKind.Request, requestId, payload);
 
         var pending = new PendingRequest();
@@ -116,7 +122,7 @@ internal sealed class MessagingChannel : IMessageBus, IRpcClient, IAsyncDisposab
             {
                 throw new RpcRemoteException(System.Text.Encoding.UTF8.GetString(resBytes));
             }
-            return MessagePack.MessagePackSerializer.Deserialize<TResponse>(resBytes);
+            return (TResponse)_serializer.Deserialize(typeof(TResponse), resBytes);
         }
         finally
         {
@@ -191,13 +197,13 @@ internal sealed class MessagingChannel : IMessageBus, IRpcClient, IAsyncDisposab
 
     private void DispatchEvent(PeerId from, string topic, ReadOnlyMemory<byte> payload)
     {
-        if (!_typeRegistry.TryGetEvent(topic, out var descriptor))
+        if (!_typeRegistry.TryGetEvent(topic, out var payloadType) || payloadType is null)
         {
-            return; // 没注册的事件直接忽略（订阅方可能不关心）
+            return; // unregistered event — subscribers don't care
         }
 
-        var obj = descriptor.Deserialize(payload.ToArray());
-        if (!_subscriptions.TryGetValue(descriptor.PayloadType, out var subs))
+        var obj = _serializer.Deserialize(payloadType, payload);
+        if (!_subscriptions.TryGetValue(payloadType, out var subs))
         {
             return;
         }
@@ -238,11 +244,11 @@ internal sealed class MessagingChannel : IMessageBus, IRpcClient, IAsyncDisposab
                 await SendErrorAsync(from, topic, requestId, $"Request type '{topic}' not registered on channel '{_name}'.").ConfigureAwait(false);
                 return;
             }
-            var requestObj = descriptor.DeserializeRequest(payload.ToArray());
+            var requestObj = _serializer.Deserialize(descriptor.RequestType, payload);
             using var scope = (_services as IServiceProvider)?.CreateScope();
             var sp = scope?.ServiceProvider ?? _services;
             var responseObj = await registration.Invoke(sp, from, requestObj, _cts.Token).ConfigureAwait(false);
-            var resBytes = MessagePack.MessagePackSerializer.Serialize(registration.ResponseType, responseObj);
+            var resBytes = _serializer.Serialize(registration.ResponseType, responseObj);
             var frames = BuildFrames(topic, MessageKind.Response, requestId, resBytes);
             await _transport.SendAsync(from, frames, _cts.Token).ConfigureAwait(false);
         }
