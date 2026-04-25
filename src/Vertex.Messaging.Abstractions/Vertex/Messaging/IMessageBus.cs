@@ -29,6 +29,16 @@ public interface IMessageBus
 }
 
 /// <summary>
-/// 事件上下文，包含来源对端信息。
+/// 事件上下文，包含来源对端信息 + opaque <see cref="PeerState"/>。
+/// PeerState 来自 transport 的 <see cref="PeerAuthenticator"/> Accept；没配 authenticator
+/// / 客户端入站事件时为 <c>null</c>。用 <see cref="PeerStateAs{TState}"/> 强转。
 /// </summary>
-public readonly record struct EventContext<T>(PeerId From, T Payload);
+public readonly record struct EventContext<T>(PeerId From, T Payload)
+{
+    public object? PeerState { get; init; }
+
+    /// <summary>
+    /// 把 opaque <see cref="PeerState"/> 强转成业务定义的会话类型。失败返回 <c>null</c>。
+    /// </summary>
+    public TState? PeerStateAs<TState>() where TState : class => PeerState as TState;
+}

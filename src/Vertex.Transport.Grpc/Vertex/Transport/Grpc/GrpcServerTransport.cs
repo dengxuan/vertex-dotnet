@@ -129,6 +129,32 @@ public sealed class GrpcServerTransport : ITransport
         }
 
         var peerId = ResolvePeerId(context);
+
+        // ===== 认证（spec/peer-authentication.md）=====
+        // 先于 peers 表注册 / Connected 事件 —— Reject 的 stream 永远进不到
+        // bus 视图，业务侧看不到这种 peer。
+        object? peerState = null;
+        if (_options.Authenticator is { } authenticator)
+        {
+            PeerAuthenticationResult result;
+            try
+            {
+                var authCtx = new PeerAuthenticationContext(peerId, ExtractClientMetadata(context));
+                result = await authenticator(authCtx, context.CancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "PeerAuthenticator threw for {Peer}; treating as Reject.", peerId);
+                throw new RpcException(new Status(StatusCode.Unauthenticated, $"authenticator threw: {ex.Message}"));
+            }
+            if (!result.Accepted)
+            {
+                throw new RpcException(new Status(StatusCode.Unauthenticated,
+                    string.IsNullOrEmpty(result.RejectReason) ? "rejected" : result.RejectReason));
+            }
+            peerState = result.PeerState;
+        }
+
         var session = new PeerSession(responseStream);
 
         if (!_peers.TryAdd(peerId, session))
@@ -151,7 +177,8 @@ public sealed class GrpcServerTransport : ITransport
                 if (frame.EndOfMessage)
                 {
                     // 铁律 #1：只入队，不走业务 handler。
-                    _inChannel.Writer.TryWrite(new TransportMessage(peerId, buffer.ToArray()));
+                    _inChannel.Writer.TryWrite(
+                        new TransportMessage(peerId, buffer.ToArray()) { PeerState = peerState });
                     buffer = new List<ReadOnlyMemory<byte>>();
                 }
             }
@@ -197,6 +224,27 @@ public sealed class GrpcServerTransport : ITransport
         }
         // 兜底：用 gRPC 给的 peer 字符串（含 host:port）+ 调用唯一 id
         return new PeerId($"{context.Peer}#{Guid.NewGuid():N}");
+    }
+
+    /// <summary>
+    /// 把 gRPC client metadata 拷成 lowercase string map（spec §4 命名约定）。
+    /// 二进制 header（"-bin" 后缀）跳过 —— authenticator 看的是文本凭证。
+    /// </summary>
+    private static IReadOnlyDictionary<string, string> ExtractClientMetadata(ServerCallContext context)
+    {
+        var headers = context.RequestHeaders;
+        if (headers is null || headers.Count == 0)
+        {
+            return new Dictionary<string, string>(StringComparer.Ordinal);
+        }
+        var dict = new Dictionary<string, string>(headers.Count, StringComparer.Ordinal);
+        foreach (var entry in headers)
+        {
+            if (entry.IsBinary) continue;
+            // gRPC 标准化保证 header key 已是 lowercase；显式再 ToLowerInvariant 防御。
+            dict[entry.Key.ToLowerInvariant()] = entry.Value;
+        }
+        return dict;
     }
 
     private void RaisePeerEvent(PeerId peer, PeerConnectionState state)

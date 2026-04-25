@@ -83,7 +83,10 @@ internal sealed class MessagingChannel : IMessageBus, IRpcClient, IAsyncDisposab
         where T : notnull
     {
         var list = _subscriptions.GetOrAdd(typeof(T), _ => new List<Subscription>());
-        var sub = new Subscription(typeof(T), (ctx, ct) => handler(new EventContext<T>(ctx.From, (T)ctx.Payload), ct));
+        var sub = new Subscription(typeof(T),
+            (ctx, ct) => handler(
+                new EventContext<T>(ctx.From, (T)ctx.Payload) { PeerState = ctx.PeerState },
+                ct));
         lock (list)
         {
             list.Add(sub);
@@ -186,10 +189,10 @@ internal sealed class MessagingChannel : IMessageBus, IRpcClient, IAsyncDisposab
         switch (kind)
         {
             case MessageKind.Event:
-                DispatchEvent(msg.From, topic, payload);
+                DispatchEvent(msg.From, topic, payload, msg.PeerState);
                 break;
             case MessageKind.Request:
-                _ = DispatchRequestAsync(msg.From, topic, requestId, payload);
+                _ = DispatchRequestAsync(msg.From, topic, requestId, payload, msg.PeerState);
                 break;
             case MessageKind.Response:
                 DispatchResponse(topic, requestId, payload);
@@ -200,7 +203,7 @@ internal sealed class MessagingChannel : IMessageBus, IRpcClient, IAsyncDisposab
         }
     }
 
-    private void DispatchEvent(PeerId from, string topic, ReadOnlyMemory<byte> payload)
+    private void DispatchEvent(PeerId from, string topic, ReadOnlyMemory<byte> payload, object? peerState)
     {
         if (!_typeRegistry.TryGetEvent(topic, out var payloadType) || payloadType is null)
         {
@@ -224,7 +227,9 @@ internal sealed class MessagingChannel : IMessageBus, IRpcClient, IAsyncDisposab
             {
                 try
                 {
-                    await sub.Invoke(new EventContext<object>(from, obj), _cts.Token).ConfigureAwait(false);
+                    await sub.Invoke(
+                        new EventContext<object>(from, obj) { PeerState = peerState },
+                        _cts.Token).ConfigureAwait(false);
                 }
                 catch (Exception ex)
                 {
@@ -234,7 +239,7 @@ internal sealed class MessagingChannel : IMessageBus, IRpcClient, IAsyncDisposab
         }
     }
 
-    private async Task DispatchRequestAsync(PeerId from, string topic, string requestId, ReadOnlyMemory<byte> payload)
+    private async Task DispatchRequestAsync(PeerId from, string topic, string requestId, ReadOnlyMemory<byte> payload, object? peerState)
     {
         if (!_handlers.TryGetValue(topic, out var registration))
         {
@@ -252,7 +257,7 @@ internal sealed class MessagingChannel : IMessageBus, IRpcClient, IAsyncDisposab
             var requestObj = _serializer.Deserialize(descriptor.RequestType, payload);
             using var scope = (_services as IServiceProvider)?.CreateScope();
             var sp = scope?.ServiceProvider ?? _services;
-            var responseObj = await registration.Invoke(sp, from, requestObj, _cts.Token).ConfigureAwait(false);
+            var responseObj = await registration.Invoke(sp, from, requestObj, peerState, _cts.Token).ConfigureAwait(false);
             var resBytes = _serializer.Serialize(registration.ResponseType, responseObj);
             var frames = BuildFrames(topic, MessageKind.Response, requestId, resBytes);
             await _transport.SendAsync(from, frames, _cts.Token).ConfigureAwait(false);

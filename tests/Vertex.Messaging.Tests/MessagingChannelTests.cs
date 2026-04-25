@@ -231,10 +231,10 @@ public class MessagingChannelTests
             Topic: MessageTopic.For<EchoRequest>().Value,
             RequestType: typeof(EchoRequest),
             ResponseType: typeof(EchoResponse),
-            Invoke: async (sp, _, requestObj, ct) =>
+            Invoke: async (sp, _, requestObj, peerState, ct) =>
             {
                 var handler = sp.GetRequiredService<IRpcHandler<EchoRequest, EchoResponse>>();
-                var ctx = new RpcContext<EchoRequest>(PeerId.Empty, (EchoRequest)requestObj);
+                var ctx = new RpcContext<EchoRequest>(PeerId.Empty, (EchoRequest)requestObj) { PeerState = peerState };
                 var res = await handler.HandleAsync(ctx, ct).ConfigureAwait(false);
                 return (object)res;
             });

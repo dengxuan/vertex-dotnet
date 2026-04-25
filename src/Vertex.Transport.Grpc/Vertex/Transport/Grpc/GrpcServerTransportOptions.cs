@@ -20,4 +20,13 @@ public sealed class GrpcServerTransportOptions
     /// 默认 <c>true</c>。设为 <c>false</c> 则静默丢弃（用于 fire-and-forget 广播场景）。
     /// </summary>
     public bool ThrowOnUnknownPeer { get; set; } = true;
+
+    /// <summary>
+    /// 可选：连接级认证回调（spec/peer-authentication.md）。设了 → 每个新 peer 在 read loop
+    /// 启动前会被调一次。返回 <c>Reject(reason)</c> = 该 stream 直接以
+    /// <see cref="Grpc.Core.StatusCode.Unauthenticated"/> 关掉，永远不入 inbox / 不发 Connected。
+    /// 返回 <c>Accept(state)</c> = state 跟着每条 <see cref="TransportMessage.PeerState"/> 走。
+    /// 不设 → 等价于无脑接受，PeerState = <c>null</c>（向后兼容）。
+    /// </summary>
+    public PeerAuthenticator? Authenticator { get; set; }
 }

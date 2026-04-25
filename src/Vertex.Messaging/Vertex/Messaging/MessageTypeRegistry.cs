@@ -47,10 +47,11 @@ public sealed class MessageTypeRegistry
 
 /// <summary>
 /// Server-side RPC handler registration used by the DI layer to route <c>topic → handler</c>.
+/// Invoke 的 <c>peerState</c> 来自 transport 的 <see cref="PeerAuthenticator"/>；没配 = null。
 /// </summary>
 internal readonly record struct RpcHandlerRegistration(
     string ChannelName,
     string Topic,
     Type RequestType,
     Type ResponseType,
-    Func<IServiceProvider, PeerId, object, CancellationToken, ValueTask<object>> Invoke);
+    Func<IServiceProvider, PeerId, object, object?, CancellationToken, ValueTask<object>> Invoke);

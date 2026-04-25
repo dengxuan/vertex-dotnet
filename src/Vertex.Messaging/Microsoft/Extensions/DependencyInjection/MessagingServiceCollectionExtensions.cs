@@ -80,10 +80,10 @@ public static class MessagingServiceCollectionExtensions
             MessageTopic.For<TRequest>().Value,
             typeof(TRequest),
             typeof(TResponse),
-            async (sp, peerId, requestObj, ct) =>
+            async (sp, peerId, requestObj, peerState, ct) =>
             {
                 var handler = sp.GetRequiredService<IRpcHandler<TRequest, TResponse>>();
-                var ctx = new RpcContext<TRequest>(peerId, (TRequest)requestObj);
+                var ctx = new RpcContext<TRequest>(peerId, (TRequest)requestObj) { PeerState = peerState };
                 var res = await handler.HandleAsync(ctx, ct).ConfigureAwait(false);
                 return res!;
             });
